@@ -63,6 +63,7 @@ func newCustomer(uid string) string {
 
 func findCustomer(id int) string {
 	url := fmt.Sprintf("http://192.176.47.48:27030/rest/S-HcN8-IUGtV-/customerManagement/v2/customer/%d", id)
+	fmt.Println(url)
 
 	req, err := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", TMF_CUSTOMER_KEY))
@@ -81,6 +82,7 @@ func findCustomer(id int) string {
 }
 
 func getPoints(js string) int {
+	fmt.Println(js)
 	type charact struct {
 		Name  string `json:"name"`
 		Value string `json:"value"`
@@ -157,6 +159,7 @@ func (c *UserController) AddPoints() {
 		UUID: "",
 	}
 	db.First(&user, "UUID = ?", uid)
+
 	cust := findCustomer(user.CID)
 	pts := getPoints(cust)
 	pts += newpts
@@ -167,18 +170,27 @@ func (c *UserController) AddPoints() {
 }
 
 func (c *UserController) Buy() {
+	defer c.ServeJSON()
 	db := models.GetDB()
 	uid := c.GetString("uid")
 	pOffering := c.GetString("offering")
+	price, _ := c.GetInt("price") // TODO: get price from product on server
 
 	user := models.User{
 		UUID: "",
 	}
 	db.First(&user, "UUID = ?", uid)
-	//cust := findCustomer(user.CID)
-	//pts := getPoints(cust)
 
-	// TODO: comprovar q tiene suficientes puntos y restar
+	udata := findCustomer(user.CID)
+	cpts := getPoints(udata)
+
+	if cpts < price {
+		c.Data["json"] = "Not enough points"
+		return
+	}
+
+	cpts -= price
+	setPoints(user.CID, cpts)
 
 	url := "http://192.176.47.48:27030/rest/S-LcN8-IUGtV-/productInventory/v2/product"
 
@@ -223,5 +235,65 @@ func (c *UserController) Buy() {
 	fmt.Println(resp)
 
 	c.Data["json"] = "ok"
-	c.ServeJSON()
+}
+
+func (c *UserController) GetCustomerInventory() {
+	defer c.ServeJSON()
+	db := models.GetDB()
+	uid := c.GetString("uid")
+
+	user := models.User{
+		UUID: "",
+	}
+	db.First(&user, "UUID = ?", uid)
+
+	type prodoff struct {
+		Name string `json:"name"`
+	}
+
+	type party struct {
+		ID string `json:"id"`
+	}
+
+	type prodresp struct {
+		QR       string  `json:"productSerialNumber"`
+		Offering prodoff `json:"productOffering"`
+		Parties  []party `json:"relatedParty"`
+	}
+
+	url := "http://192.176.47.48:27030/rest/S-LcN8-IUGtV-/productInventory/v2//product"
+
+	req, err := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", TMF_INVENTORY_KEY))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		c.Data["json"] = ""
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	var pr []prodresp
+	json.Unmarshal(body, &pr)
+
+	type result struct {
+		Name string
+		QR   string
+	}
+
+	var res []result
+	for _, p := range pr {
+		if p.Parties[0].ID == strconv.Itoa(user.CID) {
+			res = append(res, result{
+				Name: p.Offering.Name,
+				QR:   p.QR,
+			})
+		}
+	}
+
+	c.Data["json"] = res
 }
