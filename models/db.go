@@ -7,7 +7,7 @@ var db *gorm.DB
 
 func init() {
 	var err error
-	db, err = gorm.Open("postgres", "host=localhost dbname=ecorun user=ivan password=admin sslmode=disable")
+	db, err = gorm.Open("postgres", "host=localhost dbname=ecorun user=postgres password=postgres sslmode=disable")
 	if err != nil {
 		panic(err)
 	}

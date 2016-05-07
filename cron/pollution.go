@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"openhack/models"
 	"os"
 	"strconv"
 )
@@ -17,14 +18,6 @@ func init() {
 	fmt.Println(FIWARE_AUTH_TOKEN)
 	GetPollutionData()
 }
-
-type PollutionPoint struct {
-	Lat   float64 `json:"lat"`
-	Lng   float64 `json:"lon"`
-	Value float64 `json:"val"`
-}
-
-type PollutionData []PollutionPoint
 
 func GetPollutionData() {
 	url := "http://orion.lab.fiware.org:1026/ngsi10/queryContext?limit=200"
@@ -64,7 +57,10 @@ func GetPollutionData() {
 	var r res
 	json.Unmarshal(body, &r)
 
-	var dt PollutionData
+	var dt models.PollutionData
+
+	db := models.GetDB()
+	db.Exec("DELETE FROM pollution_points")
 
 	for _, cr := range r.ContextResponses {
 		var lat, lng, pollution float64
@@ -84,16 +80,18 @@ func GetPollutionData() {
 		}
 
 		if pollution > 10 && pollution < 750 {
-			dt = append(dt, PollutionPoint{
+			p := models.PollutionPoint{
 				Lat:   lat,
 				Lng:   lng,
 				Value: pollution,
-			})
+			}
+			db.Create(&p)
+			dt = append(dt, p)
 		}
 	}
 
 	type finalRes struct {
-		Points PollutionData `json:"points"`
+		Points models.PollutionData `json:"points"`
 	}
 
 	fr := finalRes{
@@ -101,6 +99,8 @@ func GetPollutionData() {
 	}
 
 	rrr, _ := json.Marshal(fr)
+	//fmt.Println(string(rrr[:]))
 	url = fmt.Sprintf("http://localhost:8080/api/newPollution?pol=%s", string(rrr[:]))
+
 	http.Get(url)
 }

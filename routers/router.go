@@ -14,6 +14,8 @@ func init() {
 	beego.Router("/products/buy", &controllers.UserController{}, "get:Buy")
 	beego.Router("/products/list", &controllers.ProductController{}, "get:GetAllOfferings")
 	beego.Router("/route/new", &controllers.RouteController{}, "get:NewRoute")
+	beego.Router("/route/new_with_end", &controllers.RouteController{}, "get:NewRouteWithEnd")
+	beego.Router("/dashboard", &controllers.DashboardController{})
 
 	var FilterCORS = func(ctx *context.Context) {
 		ctx.Output.Header("Access-Control-Allow-Origin", "*")
