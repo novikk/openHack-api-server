@@ -142,6 +142,9 @@ func (c *UserController) FindOrCreateUser() {
 		c.Data["json"] = newCustomer(uid)
 	}
 
+	var r interface{}
+	json.Unmarshal([]byte(c.Data["json"].(string)), &r)
+	c.Data["json"] = r
 	c.ServeJSON()
 }
 
@@ -159,6 +162,66 @@ func (c *UserController) AddPoints() {
 	pts += newpts
 
 	setPoints(user.CID, pts)
+	c.Data["json"] = "ok"
+	c.ServeJSON()
+}
+
+func (c *UserController) Buy() {
+	db := models.GetDB()
+	uid := c.GetString("uid")
+	pOffering := c.GetString("offering")
+
+	user := models.User{
+		UUID: "",
+	}
+	db.First(&user, "UUID = ?", uid)
+	//cust := findCustomer(user.CID)
+	//pts := getPoints(cust)
+
+	// TODO: comprovar q tiene suficientes puntos y restar
+
+	url := "http://192.176.47.48:27030/rest/S-LcN8-IUGtV-/productInventory/v2/product"
+
+	var jsonStr = []byte(`
+		{
+	    "name": "Item bought",
+	    "description": "Bought product",
+	    "status": "Created",
+	    "isCustomerVisible": true,
+	    "isBundle" : true,
+	    "productSerialNumber": "GEN_QR",
+	    "startDate": "2014-04-25T12:16:43.0Z",
+	    "orderDate": "2014-04-25T12:16:43.0Z",
+	    "terminationDate": "",
+	    "productOffering":
+	    {
+        "id": "http://192.176.47.48:27030/catalogApi/productOffering/` + pOffering + `",
+        "name": "` + pOffering + `"
+	    },
+
+	    "relatedParty": [
+	    {
+        "id": "` + strconv.Itoa(user.CID) + `",
+        "role":"owner",
+        "href":""
+	    }]
+	}
+	`)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", TMF_INVENTORY_KEY))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer resp.Body.Close()
+	fmt.Println(resp)
+
 	c.Data["json"] = "ok"
 	c.ServeJSON()
 }
